@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>BARCODE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<style>
+    *{
+        box-sizing: border-box;
+    }
+    input{
+        padding: 10px 20px;
+    }
+    button{
+        padding: 10px 20px;
+        width: 100%;
+        color: #fff;
+        border: 0;
+        background: #0a4b78;
+    }
+</style>
+<body>
+<div style="width: 100%;display: flex;flex-direction: column;gap: 30px;padding: 20px">
+    <input type="text" id="barcode_text">
+    <button class="send" type="button">Gönder</button>
+    <button class="scan" type="button">Tara</button>
+    <canvas id="canvas" height="1920" width="1080" style="display: none"></canvas>
+    <audio id="sound" controls style="display: none;opacity: 0">
+        <source src="warning.mp3" type="audio/mpeg">
+    </audio>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script>
+    var send_address = "http://gokhancelebi.net/";
+
+    $(function () {
+        // check compatibility
+        if (!('BarcodeDetector' in window)) {
+            alert('Barcode Detector is not supported by this browser.');
+        }
+        // Put event listeners into place
+        $(".scan").click(function () {
+            // Grab elements, create settings, etc.
+            var canvas = document.getElementById("canvas"),
+                context = canvas.getContext("2d"),
+                // we don't need to append the video to the document
+                video = document.createElement("video"),
+                videoObj =
+                    navigator.mediaDevices.getUserMedia || navigator.mozGetUserMedia ? // our browser is up to date with specs ?
+                        {
+                            video: {
+                                width: {min: 1280, max: 1280},
+                                height: {min: 720, max: 720},
+                                require: ['width', 'height'],
+                                facingMode: 'environment'
+                            }
+                        } :
+                        {
+                            video: {
+                                mandatory: {
+                                    minWidth: 1280,
+                                    minHeight: 720,
+                                    maxWidth: 1280,
+                                    maxHeight: 720
+                                }
+                            }
+                        },
+                errBack = function (error) {
+                    console.log("Video capture error: ", error.code);
+                };
+            // create a crop object that will be calculated on load of the video
+            var crop;
+            // create a variable that will enable us to stop the loop.
+            var raf;
+            canvas.style.display = "block";
+
+            navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+            // Put video listeners into place
+            navigator.getUserMedia(videoObj, function (stream) {
+                video.srcObject = stream;
+                video.onplaying = function () {
+                    var croppedWidth = (Math.min(video.videoHeight, canvas.height) / Math.max(video.videoHeight, canvas.height)) * Math.min(video.videoWidth, canvas.width),
+                        croppedX = (video.videoWidth - croppedWidth) / 2;
+                    crop = {w: croppedWidth, h: video.videoHeight, x: croppedX, y: 0};
+                    // call our loop only when the video is playing
+                    raf = requestAnimationFrame(loop);
+                };
+                video.onpause = function () {
+                    // stop the loop
+                    cancelAnimationFrame(raf);
+                }
+                video.play();
+            }, errBack);
+
+            function loop() {
+                context.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, canvas.width, canvas.height);
+                raf = requestAnimationFrame(loop);
+            }
+
+            // context.translate(canvas.width, 0);
+            // context.scale(-1,1);
+            // context.scale(-1,1);
+            var barcodeDetector = null;
+            var setIntervalProcess = setInterval(function () {
+                barcodeDetector = new BarcodeDetector({formats: ['code_39', 'codabar', 'ean_13']});
+                barcodeDetector.detect(canvas)
+                    .then(barcodes => {
+
+                        barcodes.forEach(function (barcode) {
+                            $("#barcode_text").val(barcode.rawValue);
+                            $("#barcode_text").css("color","green");
+                            canvas.style.display = "none";
+                            sound.style.display = "block";
+                            sound.play();
+                            setTimeout(function (){
+                                sound.style.display = "none";
+                            },2000);
+                            clearInterval(setIntervalProcess);
+
+                        });
+
+                    })
+                    .catch(err => {
+                        alert("no barcode");
+                        console.log(err);
+                    })
+            }, 100);
+        });
+
+        $(".send").click(function () {
+
+            $("#barcode_text").css("color","black");
+
+            $.get(send_address + "?barcode="+$("#barcode_text").val(),function (data){
+                // ek kodlar eklenebilir
+                $("#barcode_text").val("");
+
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
